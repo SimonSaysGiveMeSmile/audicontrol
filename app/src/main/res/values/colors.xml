@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Audi palette -->
+    <color name="audi_black">#0A0A0A</color>
+    <color name="audi_dark_surface">#141414</color>
+    <color name="audi_card_surface">#1E1E1E</color>
+    <color name="audi_red">#BB0A14</color>
+    <color name="audi_red_dim">#7A0009</color>
+    <color name="audi_white">#F5F5F5</color>
+    <color name="audi_grey_light">#9E9E9E</color>
+    <color name="audi_grey_mid">#424242</color>
+    <color name="audi_grey_dark">#2A2A2A</color>
+    <color name="audi_divider">#2C2C2C</color>
+</resources>

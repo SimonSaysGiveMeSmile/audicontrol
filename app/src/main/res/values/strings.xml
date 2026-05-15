@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">AudiControl</string>
+    <string name="login_title">Sign in to myAudi</string>
+    <string name="login_subtitle">Connect your Audi account to continue</string>
+    <string name="login_email">Email</string>
+    <string name="login_password">Password</string>
+    <string name="login_button">Sign In</string>
+    <string name="login_disclaimer">This app is not affiliated with Audi AG or Volkswagen Group.</string>
+    <string name="dashboard_locked">Locked</string>
+    <string name="dashboard_unlocked">Unlocked</string>
+    <string name="action_lock">Lock</string>
+    <string name="action_unlock">Unlock</string>
+    <string name="action_honk">Honk &amp; Flash</string>
+    <string name="action_send_dest">Send Destination</string>
+    <string name="action_climate">Climate Control</string>
+    <string name="action_climate_unavailable">Requires CAN Bridge (v2)</string>
+    <string name="about_title">About</string>
+    <string name="about_disclaimer">AudiControl is an independent, unofficial application. It is not affiliated with, endorsed by, or connected to Audi AG, Volkswagen Group, or any of their subsidiaries.\n\nUse of this app is subject to Audi\'s terms of service. Remote features require an active Audi connect PLUS subscription. The app may stop working if Audi changes their API.</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_actions">Controls</string>
+    <string name="nav_about">About</string>
+    <string name="fuel_level">Fuel Level</string>
+    <string name="range">Range</string>
+    <string name="odometer">Odometer</string>
+    <string name="doors">Doors</string>
+    <string name="mock_banner">MOCK MODE — no live vehicle</string>
+</resources>

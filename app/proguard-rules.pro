@@ -1,0 +1,4 @@
+-keep class net.openid.appauth.** { *; }
+-keep class com.audicontrol.data.** { *; }
+-dontwarn okhttp3.**
+-dontwarn retrofit2.**
