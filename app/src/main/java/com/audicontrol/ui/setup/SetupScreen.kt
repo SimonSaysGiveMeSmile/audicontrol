@@ -11,6 +11,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -18,11 +22,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import com.audicontrol.data.UserPreferences
 import com.audicontrol.obd.ConnectionManager
 import com.audicontrol.obd.ConnectionState
 import com.audicontrol.obd.OBDDevice
 import com.audicontrol.theme.*
+import com.audicontrol.ui.vinlookup.VinLookupViewModel
 import kotlinx.coroutines.launch
 
 enum class ConnectionMode {
@@ -30,13 +38,24 @@ enum class ConnectionMode {
     BLUETOOTH_OBD
 }
 
+private enum class SetupStep {
+    VIN_ENTRY,
+    CONNECTION_MODE
+}
+
 @Composable
 fun SetupScreen(
     connectionManager: ConnectionManager,
+    preferences: UserPreferences,
+    vinLookupViewModel: VinLookupViewModel,
+    onScanVin: () -> Unit,
     onCloudSelected: () -> Unit,
-    onOBDConnected: () -> Unit
+    onOBDConnected: () -> Unit,
+    onSkipConnection: () -> Unit
 ) {
+    var step by remember { mutableStateOf(SetupStep.VIN_ENTRY) }
     var selectedMode by remember { mutableStateOf<ConnectionMode?>(null) }
+    val vinState by vinLookupViewModel.state.collectAsState()
     val connectionStatus by connectionManager.status.collectAsState()
     val devices by connectionManager.devices.collectAsState()
     val scope = rememberCoroutineScope()
@@ -44,27 +63,17 @@ fun SetupScreen(
     val bluetoothPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
-        val allGranted = grants.values.all { it }
-        if (allGranted) {
-            connectionManager.scanForDevices()
-        }
+        if (grants.values.all { it }) connectionManager.scanForDevices()
     }
 
     fun requestBluetoothAndScan() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             bluetoothPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.BLUETOOTH_SCAN,
-                    Manifest.permission.BLUETOOTH_CONNECT
-                )
+                arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
             )
         } else {
             bluetoothPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.BLUETOOTH,
-                    Manifest.permission.BLUETOOTH_ADMIN,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                )
+                arrayOf(Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN, Manifest.permission.ACCESS_FINE_LOCATION)
             )
         }
     }
@@ -73,68 +82,182 @@ fun SetupScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(AudiBlack)
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         Spacer(Modifier.height(32.dp))
 
-        Text(
-            "CONNECTION",
-            style = MaterialTheme.typography.labelLarge,
-            color = AudiGreyLight
-        )
-        Text(
-            "Choose how to connect to your vehicle",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Light
-        )
+        Text("SETUP", style = MaterialTheme.typography.labelLarge, color = AudiGreyLight)
 
-        Spacer(Modifier.height(16.dp))
+        when (step) {
+            SetupStep.VIN_ENTRY -> {
+                Text(
+                    "Enter your vehicle's VIN",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Light
+                )
+                Text(
+                    "Found on the windshield, driver's door jamb, or registration",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AudiGreyLight
+                )
 
-        // Cloud option
-        ConnectionOption(
-            icon = Icons.Default.Cloud,
-            title = "myAudi Cloud",
-            description = "Remote access via Audi connect. Lock, unlock, status, honk & flash.",
-            selected = selectedMode == ConnectionMode.CLOUD,
-            onClick = { selectedMode = ConnectionMode.CLOUD }
-        )
+                Spacer(Modifier.height(8.dp))
 
-        // Bluetooth OBD option
-        ConnectionOption(
-            icon = Icons.Default.Bluetooth,
-            title = "Bluetooth OBD-II",
-            description = "Direct vehicle access via ELM327/OBDLink adapter. Live data, diagnostics.",
-            selected = selectedMode == ConnectionMode.BLUETOOTH_OBD,
-            onClick = { selectedMode = ConnectionMode.BLUETOOTH_OBD }
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        AnimatedVisibility(visible = selectedMode == ConnectionMode.CLOUD) {
-            Button(
-                onClick = onCloudSelected,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AudiRed),
-                shape = MaterialTheme.shapes.small
-            ) {
-                Text("CONTINUE WITH MYAUDI", style = MaterialTheme.typography.labelLarge)
-            }
-        }
-
-        AnimatedVisibility(visible = selectedMode == ConnectionMode.BLUETOOTH_OBD) {
-            BluetoothDeviceList(
-                devices = devices,
-                connectionState = connectionStatus.state,
-                error = connectionStatus.error,
-                onScan = { requestBluetoothAndScan() },
-                onConnect = { device ->
-                    scope.launch {
-                        val success = connectionManager.connect(device)
-                        if (success) onOBDConnected()
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = vinState.vinInput,
+                        onValueChange = { vinLookupViewModel.updateVin(it) },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("VIN") },
+                        placeholder = { Text("17 characters") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Characters,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { vinLookupViewModel.decode() }),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AudiRed,
+                            cursorColor = AudiRed,
+                            focusedLabelColor = AudiRed
+                        )
+                    )
+                    IconButton(onClick = onScanVin, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.CameraAlt, contentDescription = "Scan VIN", tint = AudiRed)
                     }
                 }
-            )
+
+                vinState.error?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = AudiRed)
+                }
+
+                vinState.result?.let { result ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(AudiCardSurface, MaterialTheme.shapes.small)
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.CheckCircle, null, tint = AudiRed)
+                        Column {
+                            Text(
+                                listOfNotNull(result.year?.toString(), result.make, result.model).joinToString(" "),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            result.trim?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall, color = AudiGreyLight)
+                            }
+                        }
+                    }
+                }
+
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (vinState.result == null) {
+                        Button(
+                            onClick = { vinLookupViewModel.decode() },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            enabled = vinState.vinInput.length == 17 && !vinState.loading,
+                            colors = ButtonDefaults.buttonColors(containerColor = AudiRed),
+                            shape = MaterialTheme.shapes.small
+                        ) {
+                            if (vinState.loading) {
+                                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = AudiWhite)
+                            } else {
+                                Text("VERIFY VIN", style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                vinLookupViewModel.saveAsMyVehicle()
+                                step = SetupStep.CONNECTION_MODE
+                            },
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AudiRed),
+                            shape = MaterialTheme.shapes.small
+                        ) {
+                            Text("CONTINUE", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
+
+                TextButton(onClick = { step = SetupStep.CONNECTION_MODE }) {
+                    Text("Skip VIN entry", color = AudiGreyLight)
+                }
+            }
+
+            SetupStep.CONNECTION_MODE -> {
+                Text(
+                    "Choose connection method",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Light
+                )
+
+                ConnectionOption(
+                    icon = Icons.Default.Cloud,
+                    title = "myAudi Cloud",
+                    description = "Remote access via Audi connect. Lock, unlock, status.",
+                    selected = selectedMode == ConnectionMode.CLOUD,
+                    onClick = { selectedMode = ConnectionMode.CLOUD }
+                )
+
+                ConnectionOption(
+                    icon = Icons.Default.Bluetooth,
+                    title = "Bluetooth OBD-II",
+                    description = "Direct vehicle access via ELM327 adapter. Live data.",
+                    selected = selectedMode == ConnectionMode.BLUETOOTH_OBD,
+                    onClick = { selectedMode = ConnectionMode.BLUETOOTH_OBD }
+                )
+
+                AnimatedVisibility(visible = selectedMode == ConnectionMode.CLOUD) {
+                    Button(
+                        onClick = {
+                            preferences.connectionMode = "CLOUD"
+                            onCloudSelected()
+                        },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AudiRed),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        Text("SIGN IN WITH MYAUDI", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+
+                AnimatedVisibility(visible = selectedMode == ConnectionMode.BLUETOOTH_OBD) {
+                    BluetoothDeviceList(
+                        devices = devices,
+                        connectionState = connectionStatus.state,
+                        error = connectionStatus.error,
+                        onScan = { requestBluetoothAndScan() },
+                        onConnect = { device ->
+                            scope.launch {
+                                val success = connectionManager.connect(device)
+                                if (success) {
+                                    preferences.connectionMode = "BLUETOOTH_OBD"
+                                    onOBDConnected()
+                                }
+                            }
+                        }
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                TextButton(onClick = {
+                    preferences.connectionMode = null
+                    onSkipConnection()
+                }) {
+                    Text("Skip for now (VIN lookup only)", color = AudiGreyLight)
+                }
+            }
         }
     }
 }

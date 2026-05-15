@@ -22,7 +22,6 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        buildConfigField("Boolean", "USE_MOCK", "true")
         buildConfigField("String", "AUTO_DEV_API_KEY", "\"${localProperties.getProperty("autodev.apiKey", "")}\"")
         manifestPlaceholders["appAuthRedirectScheme"] = "com.audicontrol"
     }
@@ -66,5 +65,10 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.retrofit.kotlinx.serialization)
     implementation(libs.coil.compose)
+    implementation(libs.mlkit.text)
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
     debugImplementation(libs.androidx.ui.tooling)
 }

@@ -52,7 +52,7 @@ fun AboutScreen(onLogout: (() -> Unit)? = null) {
             CapabilityRow("Infotainment", available = false, note = "v2 — requires CAN Bridge")
         }
 
-        if (onLogout != null && !BuildConfig.USE_MOCK) {
+        if (onLogout != null) {
             HorizontalDivider(color = AudiDivider)
             Button(
                 onClick = onLogout,

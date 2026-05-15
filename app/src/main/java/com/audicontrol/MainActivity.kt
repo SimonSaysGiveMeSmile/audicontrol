@@ -19,9 +19,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.audicontrol.auth.AuthManager
 import com.audicontrol.auth.AuthState
-import com.audicontrol.data.MockVehicleBackend
-import com.audicontrol.data.MyAudiBackend
-import com.audicontrol.data.VehicleBackend
+import com.audicontrol.data.*
 import com.audicontrol.obd.ConnectionManager
 import com.audicontrol.obd.LiveDataStream
 import com.audicontrol.theme.AudiControlTheme
@@ -31,14 +29,17 @@ import com.audicontrol.ui.dashboard.DashboardScreen
 import com.audicontrol.ui.dashboard.DashboardViewModel
 import com.audicontrol.ui.dashboard.LiveDashboardScreen
 import com.audicontrol.ui.login.LoginScreen
-import com.audicontrol.ui.setup.ConnectionMode
 import com.audicontrol.ui.setup.SetupScreen
+import com.audicontrol.ui.vinlookup.VinLookupScreen
+import com.audicontrol.ui.vinlookup.VinLookupViewModel
+import com.audicontrol.ui.vinlookup.VinScannerScreen
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var authManager: AuthManager
     private lateinit var connectionManager: ConnectionManager
+    private lateinit var preferences: UserPreferences
 
     private val authLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -53,12 +54,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         authManager = AuthManager(this)
         connectionManager = ConnectionManager(this)
+        preferences = UserPreferences(this)
         enableEdgeToEdge()
         setContent {
             AudiControlTheme {
                 AudiControlApp(
                     authManager = authManager,
                     connectionManager = connectionManager,
+                    preferences = preferences,
                     onSignIn = { authLauncher.launch(authManager.buildAuthIntent()) }
                 )
             }
@@ -70,116 +73,109 @@ class MainActivity : ComponentActivity() {
         authManager.dispose()
     }
 }
+// PLACEHOLDER_COMPOSABLES
 
 @Composable
 fun AudiControlApp(
     authManager: AuthManager,
     connectionManager: ConnectionManager,
+    preferences: UserPreferences,
     onSignIn: () -> Unit
 ) {
-    if (BuildConfig.USE_MOCK) {
-        MockApp(connectionManager)
-    } else {
-        RealApp(authManager, connectionManager, onSignIn)
-    }
-}
-
-@Composable
-private fun RealApp(authManager: AuthManager, connectionManager: ConnectionManager, onSignIn: () -> Unit) {
     val authState by authManager.authState.collectAsState()
+    var setupComplete by remember { mutableStateOf(preferences.hasVehicle()) }
 
-    when (authState) {
-        is AuthState.LoggedIn -> {
-            val backend = remember { MyAudiBackend(authManager) }
-            MainScaffold(backend, connectionManager, onLogout = { authManager.logout() })
-        }
-        else -> {
-            LoginScreen(authState = authState, onSignIn = onSignIn)
-        }
-    }
-}
-
-@Composable
-private fun MockApp(connectionManager: ConnectionManager) {
-    var connectionMode by remember { mutableStateOf<ConnectionMode?>(null) }
-
-    when (connectionMode) {
-        null -> {
-            SetupScreen(
-                connectionManager = connectionManager,
-                onCloudSelected = { connectionMode = ConnectionMode.CLOUD },
-                onOBDConnected = { connectionMode = ConnectionMode.BLUETOOTH_OBD }
-            )
-        }
-        ConnectionMode.CLOUD -> {
-            val backend = remember { MockVehicleBackend() }
-            MainScaffold(backend, connectionManager, onLogout = { connectionMode = null })
-        }
-        ConnectionMode.BLUETOOTH_OBD -> {
-            val liveDataStream = remember { LiveDataStream(connectionManager.obdConnection) }
-            OBDScaffold(liveDataStream, connectionManager, onDisconnect = { connectionMode = null })
-        }
-    }
-}
-
-@Composable
-private fun OBDScaffold(
-    liveDataStream: LiveDataStream,
-    connectionManager: ConnectionManager,
-    onDisconnect: () -> Unit
-) {
-    val navController = rememberNavController()
-    val scope = rememberCoroutineScope()
-
-    Scaffold(
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 0.dp
-            ) {
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentRoute = navBackStackEntry?.destination?.route
-
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.Speed, null) },
-                    label = { Text("Live") },
-                    selected = currentRoute == "live",
-                    onClick = { navController.navigate("live") { launchSingleTop = true } }
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.Info, null) },
-                    label = { Text("About") },
-                    selected = currentRoute == "about",
-                    onClick = { navController.navigate("about") { launchSingleTop = true } }
-                )
-            }
-        }
-    ) { padding ->
-        NavHost(
-            navController = navController,
-            startDestination = "live",
-            modifier = Modifier.padding(padding)
-        ) {
-            composable("live") { LiveDashboardScreen(liveDataStream) }
-            composable("about") {
-                AboutScreen(onLogout = {
-                    scope.launch {
-                        connectionManager.disconnect()
-                        onDisconnect()
+    if (!setupComplete) {
+        SetupFlow(
+            connectionManager = connectionManager,
+            preferences = preferences,
+            onComplete = { setupComplete = true },
+            authManager = authManager,
+            onSignIn = onSignIn
+        )
+    } else {
+        when (authState) {
+            is AuthState.LoggedIn -> {
+                val backend = remember { MyAudiBackend(authManager) }
+                MainScaffold(
+                    backend = backend,
+                    preferences = preferences,
+                    onLogout = {
+                        authManager.logout()
+                        preferences.clear()
+                        setupComplete = false
                     }
-                })
+                )
+            }
+            else -> {
+                MainScaffold(
+                    backend = null,
+                    preferences = preferences,
+                    onLogout = {
+                        preferences.clear()
+                        setupComplete = false
+                    }
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun SetupFlow(
+    connectionManager: ConnectionManager,
+    preferences: UserPreferences,
+    onComplete: () -> Unit,
+    authManager: AuthManager,
+    onSignIn: () -> Unit
+) {
+    var showScanner by remember { mutableStateOf(false) }
+    val vinLookupViewModel = remember { VinLookupViewModel(preferences) }
+
+    if (showScanner) {
+        VinScannerScreen(
+            onVinDetected = { vin ->
+                vinLookupViewModel.setVinFromScanner(vin)
+                showScanner = false
+            },
+            onClose = { showScanner = false }
+        )
+    } else {
+        SetupScreen(
+            connectionManager = connectionManager,
+            preferences = preferences,
+            vinLookupViewModel = vinLookupViewModel,
+            onScanVin = { showScanner = true },
+            onCloudSelected = {
+                onSignIn()
+                onComplete()
+            },
+            onOBDConnected = { onComplete() },
+            onSkipConnection = { onComplete() }
+        )
     }
 }
 
 @Composable
 private fun MainScaffold(
-    backend: VehicleBackend,
-    connectionManager: ConnectionManager,
-    onLogout: (() -> Unit)?
+    backend: VehicleBackend?,
+    preferences: UserPreferences,
+    onLogout: () -> Unit
 ) {
     val navController = rememberNavController()
+    var showScanner by remember { mutableStateOf(false) }
+    val vinLookupViewModel = remember { VinLookupViewModel(preferences) }
+
+    if (showScanner) {
+        VinScannerScreen(
+            onVinDetected = { vin ->
+                vinLookupViewModel.setVinFromScanner(vin)
+                showScanner = false
+            },
+            onClose = { showScanner = false }
+        )
+        return
+    }
 
     Scaffold(
         bottomBar = {
@@ -190,17 +186,25 @@ private fun MainScaffold(
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
+                if (backend != null) {
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Dashboard, null) },
+                        label = { Text("Dashboard") },
+                        selected = currentRoute == "dashboard",
+                        onClick = { navController.navigate("dashboard") { launchSingleTop = true } }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.ControlCamera, null) },
+                        label = { Text("Controls") },
+                        selected = currentRoute == "actions",
+                        onClick = { navController.navigate("actions") { launchSingleTop = true } }
+                    )
+                }
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.Dashboard, null) },
-                    label = { Text("Dashboard") },
-                    selected = currentRoute == "dashboard",
-                    onClick = { navController.navigate("dashboard") { launchSingleTop = true } }
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.ControlCamera, null) },
-                    label = { Text("Controls") },
-                    selected = currentRoute == "actions",
-                    onClick = { navController.navigate("actions") { launchSingleTop = true } }
+                    icon = { Icon(Icons.Default.Search, null) },
+                    label = { Text("Lookup") },
+                    selected = currentRoute == "lookup",
+                    onClick = { navController.navigate("lookup") { launchSingleTop = true } }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Info, null) },
@@ -213,16 +217,24 @@ private fun MainScaffold(
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = "dashboard",
+            startDestination = if (backend != null) "dashboard" else "lookup",
             modifier = Modifier.padding(padding)
         ) {
-            composable("dashboard") {
-                val viewModel = remember { DashboardViewModel(backend) }
-                DashboardScreen(viewModel)
+            if (backend != null) {
+                composable("dashboard") {
+                    val viewModel = remember { DashboardViewModel(backend) }
+                    DashboardScreen(viewModel)
+                }
+                composable("actions") {
+                    val viewModel = remember { DashboardViewModel(backend) }
+                    ActionsScreen(viewModel, backend.capabilities)
+                }
             }
-            composable("actions") {
-                val viewModel = remember { DashboardViewModel(backend) }
-                ActionsScreen(viewModel, backend.capabilities)
+            composable("lookup") {
+                VinLookupScreen(
+                    viewModel = vinLookupViewModel,
+                    onScanVin = { showScanner = true }
+                )
             }
             composable("about") { AboutScreen(onLogout = onLogout) }
         }

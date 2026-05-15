@@ -17,7 +17,6 @@ import coil.compose.AsyncImage
 import coil.ImageLoader
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
-import com.audicontrol.BuildConfig
 import com.audicontrol.data.VehicleImageService
 import com.audicontrol.theme.*
 import com.audicontrol.ui.components.RingGauge
@@ -33,17 +32,6 @@ fun DashboardScreen(viewModel: DashboardViewModel) {
             .background(AudiBlack)
             .verticalScroll(rememberScrollState())
     ) {
-        if (BuildConfig.USE_MOCK) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .background(AudiRedDim)
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-            ) {
-                Text("MOCK MODE", style = MaterialTheme.typography.labelSmall, color = AudiWhite)
-            }
-        }
-
         // Header
         Row(
             Modifier
