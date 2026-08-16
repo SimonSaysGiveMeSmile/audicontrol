@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -83,13 +84,16 @@ fun AudiControlApp(
     onSignIn: () -> Unit
 ) {
     val authState by authManager.authState.collectAsState()
-    var setupComplete by remember { mutableStateOf(preferences.hasVehicle()) }
+    var setupComplete by remember { mutableStateOf(preferences.setupCompleted) }
 
     if (!setupComplete) {
         SetupFlow(
             connectionManager = connectionManager,
             preferences = preferences,
-            onComplete = { setupComplete = true },
+            onComplete = {
+                preferences.setupCompleted = true
+                setupComplete = true
+            },
             authManager = authManager,
             onSignIn = onSignIn
         )
@@ -186,13 +190,13 @@ private fun MainScaffold(
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
+                NavigationBarItem(
+                    icon = { Icon(Icons.Default.Dashboard, null) },
+                    label = { Text("Home") },
+                    selected = currentRoute == "dashboard",
+                    onClick = { navController.navigate("dashboard") { launchSingleTop = true } }
+                )
                 if (backend != null) {
-                    NavigationBarItem(
-                        icon = { Icon(Icons.Default.Dashboard, null) },
-                        label = { Text("Dashboard") },
-                        selected = currentRoute == "dashboard",
-                        onClick = { navController.navigate("dashboard") { launchSingleTop = true } }
-                    )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.ControlCamera, null) },
                         label = { Text("Controls") },
@@ -217,14 +221,18 @@ private fun MainScaffold(
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = if (backend != null) "dashboard" else "lookup",
+            startDestination = "dashboard",
             modifier = Modifier.padding(padding)
         ) {
-            if (backend != null) {
-                composable("dashboard") {
+            composable("dashboard") {
+                if (backend != null) {
                     val viewModel = remember { DashboardViewModel(backend) }
                     DashboardScreen(viewModel)
+                } else {
+                    HomePlaceholderScreen(preferences)
                 }
+            }
+            if (backend != null) {
                 composable("actions") {
                     val viewModel = remember { DashboardViewModel(backend) }
                     ActionsScreen(viewModel, backend.capabilities)
@@ -237,6 +245,49 @@ private fun MainScaffold(
                 )
             }
             composable("about") { AboutScreen(onLogout = onLogout) }
+        }
+    }
+}
+
+@Composable
+private fun HomePlaceholderScreen(preferences: UserPreferences) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            "AUDICONTROL",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        if (preferences.hasVehicle()) {
+            Text(
+                listOfNotNull(
+                    preferences.savedYear.takeIf { it > 0 }?.toString(),
+                    preferences.savedMake,
+                    preferences.savedModel
+                ).joinToString(" ").ifEmpty { "My Vehicle" },
+                style = MaterialTheme.typography.headlineMedium
+            )
+            Text(
+                "VIN: ${preferences.savedVin}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            Text(
+                "Welcome",
+                style = MaterialTheme.typography.headlineMedium
+            )
+            Text(
+                "Use the Lookup tab to decode any VIN, or sign in with myAudi for remote vehicle access.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

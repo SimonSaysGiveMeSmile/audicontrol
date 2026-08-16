@@ -88,7 +88,16 @@ fun SetupScreen(
     ) {
         Spacer(Modifier.height(32.dp))
 
-        Text("SETUP", style = MaterialTheme.typography.labelLarge, color = AudiGreyLight)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("SETUP", style = MaterialTheme.typography.labelLarge, color = AudiGreyLight)
+            TextButton(onClick = { onSkipConnection() }) {
+                Text("SKIP ALL", color = AudiRed, fontWeight = FontWeight.Bold)
+            }
+        }
 
         when (step) {
             SetupStep.VIN_ENTRY -> {
@@ -189,8 +198,12 @@ fun SetupScreen(
                     }
                 }
 
-                TextButton(onClick = { step = SetupStep.CONNECTION_MODE }) {
-                    Text("Skip VIN entry", color = AudiGreyLight)
+                OutlinedButton(
+                    onClick = { step = SetupStep.CONNECTION_MODE },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text("SKIP VIN ENTRY", color = AudiGreyLight)
                 }
             }
 
@@ -251,11 +264,16 @@ fun SetupScreen(
 
                 Spacer(Modifier.height(8.dp))
 
-                TextButton(onClick = {
-                    preferences.connectionMode = null
-                    onSkipConnection()
-                }) {
-                    Text("Skip for now (VIN lookup only)", color = AudiGreyLight)
+                Button(
+                    onClick = {
+                        preferences.connectionMode = null
+                        onSkipConnection()
+                    },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AudiGreyDark),
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text("CONTINUE WITHOUT CONNECTION", style = MaterialTheme.typography.labelLarge)
                 }
             }
         }

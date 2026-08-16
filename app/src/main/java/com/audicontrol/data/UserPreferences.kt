@@ -28,6 +28,10 @@ class UserPreferences(context: Context) {
         get() = prefs.getString("connection_mode", null)
         set(value) = prefs.edit().putString("connection_mode", value).apply()
 
+    var setupCompleted: Boolean
+        get() = prefs.getBoolean("setup_completed", false)
+        set(value) = prefs.edit().putBoolean("setup_completed", value).apply()
+
     fun hasVehicle(): Boolean = savedVin != null
 
     fun saveVehicle(vin: String, make: String?, model: String?, year: Int?) {
